@@ -1,14 +1,32 @@
-import { useQuery } from "@tanstack/react-query";
-import type { APIMessage } from "discord-api-types/v9";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import type {
+  APIChannel,
+  APIMessage,
+  RESTPostAPIChannelMessageJSONBody,
+} from "discord-api-types/v9";
 import axios from "axios";
-import { Input } from "./components/ui/input";
+import { Input } from "@/components/ui/input";
 import { useState } from "react";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+} from "@/components/ui/form";
+
+const messageFormSchema = z.object({
+  content: z.string(),
+});
 
 function App() {
   const [channelId, setChannelId] = useState("");
 
   const token = localStorage.getItem("token");
-  const query = useQuery<APIMessage[]>({
+  const messageQuery = useQuery<APIMessage[]>({
     queryKey: ["messages"],
     queryFn: () => {
       return axios
@@ -22,10 +40,48 @@ function App() {
         )
         .then((res) => res.data);
     },
-    enabled: !!channelId, // The query will not execute until the channelId is truthy
+    enabled: !!channelId,
   });
 
-  if (query.isLoading) {
+  const channelQuery = useQuery<APIChannel>({
+    queryKey: ["channels"],
+    queryFn: () => {
+      return axios
+        .get(`https://discord.com/api/v9/channels/${channelId}`, {
+          headers: {
+            Authorization: token,
+          },
+        })
+        .then((res) => res.data);
+    },
+    enabled: !!channelId,
+  });
+
+  const messageMutation = useMutation({
+    mutationFn: (values: RESTPostAPIChannelMessageJSONBody) =>
+      axios
+        .post(
+          `https://discord.com/api/v9/channels/${channelId}/messages`,
+          values,
+          {
+            headers: {
+              Authorization: token,
+            },
+          }
+        )
+        .then((res) => res.data),
+  });
+
+  const messageForm = useForm({
+    resolver: zodResolver(messageFormSchema),
+    defaultValues: { content: "" },
+  });
+
+  function handleMessageSubmit(values: z.infer<typeof messageFormSchema>) {
+    messageMutation.mutate({ ...values, tts: false });
+  }
+
+  if (messageQuery.isLoading) {
     return (
       <div>
         <div>
@@ -42,8 +98,8 @@ function App() {
     );
   }
 
-  if (query.isError) {
-    return <div>Error: {query.error.message}</div>;
+  if (messageQuery.isError) {
+    return <div>Error: {messageQuery.error.message}</div>;
   }
 
   return (
@@ -58,7 +114,7 @@ function App() {
         />
       </div>
       <div className="space-y-1.5">
-        {query.data
+        {messageQuery.data
           ?.map((message) => (
             <div key={message.id} className="flex gap-1.5">
               <img
@@ -101,6 +157,29 @@ function App() {
           ))
           .reverse()}
       </div>
+      <Form {...messageForm}>
+        <form
+          onSubmit={messageForm.handleSubmit(handleMessageSubmit)}
+          className="space-y-1.5"
+        >
+          <FormField
+            control={messageForm.control}
+            name="content"
+            render={({ field }) => (
+              <FormItem className="space-y-1">
+                <FormControl>
+                  <Input
+                    type="text"
+                    placeholder={`Message #${channelQuery.data?.name}`}
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </form>
+      </Form>
     </div>
   );
 }
