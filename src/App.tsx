@@ -6,7 +6,7 @@ import type {
 } from "discord-api-types/v9";
 import axios from "axios";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,6 +17,7 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
+import { useNavigate } from "react-router-dom";
 
 const messageFormSchema = z.object({
   content: z.string(),
@@ -24,8 +25,13 @@ const messageFormSchema = z.object({
 
 function App() {
   const [channelId, setChannelId] = useState("");
-
   const token = localStorage.getItem("token");
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!token) navigate("/sign-in");
+  }, [token, navigate]);
+
   const messageQuery = useQuery<APIMessage[]>({
     queryKey: ["messages"],
     queryFn: () => {
